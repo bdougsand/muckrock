@@ -21,6 +21,7 @@ from email.parser import Parser
 import markdown
 import re
 from urllib import urlencode
+import zlib
 
 from muckrock.forms import NewsletterSignupForm, TagManagerForm
 from muckrock.project.forms import ProjectManagerForm
@@ -30,7 +31,7 @@ register = Library()
 @register.simple_tag
 def autologin(user):
     """Generate an autologin token for the user."""
-    if user.is_authenticated():
+    if user and user.is_authenticated():
         return urlencode(user.profile.autologin())
     return ''
 
@@ -263,15 +264,18 @@ def markdown_filter(text, _safe=None):
 
 class CacheNode(Node):
     """Cache Node for condtional cache tag"""
-    def __init__(self, nodelist, expire_time_var, fragment_name, vary_on, cache_name):
+    def __init__(self, nodelist, expire_time_var, fragment_name,
+            vary_on, cache_name, compress=False):
         # pylint: disable=too-many-arguments
         self.nodelist = nodelist
         self.expire_time_var = expire_time_var
         self.fragment_name = fragment_name
         self.vary_on = vary_on
         self.cache_name = cache_name
+        self.compress = compress
 
-    def render(self, context):
+    def _resolve_vars(self, context):
+        """Error handling for resolving vars"""
         try:
             expire_time = self.expire_time_var.resolve(context)
         except VariableDoesNotExist:
@@ -300,39 +304,33 @@ class CacheNode(Node):
             except InvalidCacheBackendError:
                 fragment_cache = caches['default']
 
+        return (expire_time, fragment_cache)
+
+    def render(self, context):
+        """Render the cached fragment"""
+        expire_time, fragment_cache = self._resolve_vars(context)
+
         # if expire time is 0 do not cache
         # memcached backend does no allow for 0 for no caching so do it here
         if expire_time != 0:
             vary_on = [var.resolve(context) for var in self.vary_on]
             cache_key = make_template_fragment_key(self.fragment_name, vary_on)
             value = fragment_cache.get(cache_key)
+            if value is not None and self.compress:
+                value = zlib.decompress(value).decode('utf8')
             if value is None:
                 value = self.nodelist.render(context)
-                fragment_cache.set(cache_key, value, expire_time)
+                if self.compress:
+                    fragment_cache.set(cache_key, zlib.compress(value.encode('utf8')), expire_time)
+                else:
+                    fragment_cache.set(cache_key, value, expire_time)
             return value
         else:
             return self.nodelist.render(context)
 
 
-@register.tag('cond_cache')
-def do_cache(parser, token):
-    """
-    This will cache the contents of a template fragment for a given amount
-    of time.
-    Usage::
-        {% load cache %}
-        {% cache [expire_time] [fragment_name] %}
-            .. some expensive processing ..
-        {% endcache %}
-    This tag also supports varying by a list of arguments::
-        {% load cache %}
-        {% cache [expire_time] [fragment_name] [var1] [var2] .. %}
-            .. some expensive processing ..
-        {% endcache %}
-    Optionally the cache to use may be specified thus::
-        {% cache ....  using="cachename" %}
-    Each unique set of arguments will result in a unique cache entry.
-    """
+def parse_cache(parser, token):
+    """Do the parsing for custom cache tags"""
     nodelist = parser.parse(('endcache',))
     parser.delete_first_token()
     tokens = token.split_contents()
@@ -343,9 +341,21 @@ def do_cache(parser, token):
         tokens = tokens[:-1]
     else:
         cache_name = None
-    return CacheNode(
+    return (
         nodelist, parser.compile_filter(tokens[1]),
         tokens[2],  # fragment_name can't be a variable.
         [parser.compile_filter(t) for t in tokens[3:]],
         cache_name,
-)
+        )
+
+
+@register.tag('cond_cache')
+def do_cache(parser, token):
+    """Cache tag that can use 0 expire time to not cache"""
+    return CacheNode(*parse_cache(parser, token))
+
+
+@register.tag('compress_cache')
+def do_compress_cache(parser, token):
+    """Cache tag that can compress its contents"""
+    return CacheNode(*parse_cache(parser, token), compress=True)

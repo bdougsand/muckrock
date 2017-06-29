@@ -67,6 +67,8 @@ def store_statistics():
             FOIARequest.objects.filter(status='partial').count(),
         total_requests_abandoned=
             FOIARequest.objects.filter(status='abandoned').count(),
+        total_requests_lawsuit=
+            FOIARequest.objects.filter(status='lawsuit').count(),
         requests_processing_days=(FOIARequest.objects
             .filter(status='submitted')
             .exclude(date_processing=None)
@@ -97,8 +99,12 @@ def store_statistics():
             FoiaMachineRequest.objects.filter(status='partial').count(),
         machine_requests_abandoned=
             FoiaMachineRequest.objects.filter(status='abandoned').count(),
+        machine_requests_lawsuit=
+            FoiaMachineRequest.objects.filter(status='lawsuit').count(),
         total_pages=FOIAFile.objects.aggregate(Sum('pages'))['pages__sum'],
         total_users=User.objects.count(),
+        total_users_excluding_agencies=
+            User.objects.exclude(profile__acct_type='agency').count(),
         total_agencies=Agency.objects.count(),
         total_fees=FOIARequest.objects.aggregate(Sum('price'))['price__sum'],
         pro_users=Profile.objects.filter(acct_type='pro').count(),

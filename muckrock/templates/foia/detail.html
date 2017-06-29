@@ -46,6 +46,7 @@
                 <h1>{{ foia.title }}</h1>
             </section>
         </header>
+        {% social title=foia.title url=foia.get_absolute_url %}
         <section class="basic-information">
 			<summary class="synopsis"><a href="{% url 'acct-profile' foia.user.username %}">{{ foia.user.get_full_name }}</a> filed this request{% if foia.agency %} with the {{foia.agency.link_display}} of {% if foia.jurisdiction.level == 'f' %}the {% endif %}<a href="{{ foia.jurisdiction.get_absolute_url }}">{{ foia.jurisdiction.name }}</a>{% if foia.jurisdiction.parent and foia.jurisdiction.level == 'l' %}, <a href="{{ foia.jurisdiction.parent.get_absolute_url }}" title="{{ foia.jurisdiction.parent.name }}">{{ foia.jurisdiction.parent.abbrev }}</a>{% endif %}{% endif %}.</summary>
             {% if foia.parent %}
@@ -120,10 +121,8 @@
             {% crowdfund foia.crowdfund.pk %}
         {% endif %}
 
-        {% cond_cache foia_cache_timeout foia_detail_bottom foia.pk request.user.pk %}
-        {% if request.user.profile.acct_type != "agency" %}
-            {% include 'foia/foia_actions.html' %}
-        {% endif %}
+        {% compress_cache foia_cache_timeout foia_detail_bottom foia.pk request.user.pk %}
+        {% include 'foia/foia_actions.html' %}
 
         <div class="tab-container">
             <ul role="tablist" class="tab-list">
@@ -228,14 +227,14 @@
                     <div class="composer-inputs">
                         <div class="composer" id="inactive">
                             <div class="composer-input">
-                                {% if can_agency_reply %}
+                                {% if request.user.profile.acct_type == "agency" %}
                                 <p>You may <a href="#agency-reply">reply directly</a> to this request.</p>
                                 {% else %}
                                 <p>You may <a href="#follow-up">follow up</a> {% if not foia.disable_autofollowups %}manually {% endif %}with the agency{% if can_appeal %} or <a href="#appeal">appeal</a> their decision{% endif %}.</p>
                                 {% endif %}
                             </div>
                         </div>
-                        {% if not can_agency_reply %}
+                        {% if not request.user.profile.acct_type == "agency" %}
                         <div class="follow-up composer" id="follow-up">
                             <form class="composer-input" method="post">
                                 <header>Send a follow up to the {{ foia.agency.name }}</header>
@@ -279,7 +278,7 @@ Sincerely,
                                 {% csrf_token %}
                                 {% include 'lib/pattern/form.html' with form=agency_reply_form %}
                                 <label class="bold">Attachments</label>
-                                <div id="fine-uploader"></div>
+                                <div id="fine-uploader1"></div>
 								<input type="hidden" name="action" value="agency_reply" />
                                 <div class="buttons">
                                     <button class="primary button" type="submit" name="agency-reply" value="1">Send</button>

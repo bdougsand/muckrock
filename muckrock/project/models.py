@@ -61,7 +61,7 @@ class Project(models.Model):
         max_length=100,
         help_text='Titles are limited to 100 characters.')
     slug = models.SlugField(
-        unique=True,
+        unique=False,
         max_length=255,
         help_text='The slug is automatically generated based on the title.')
     summary = models.TextField(blank=True, null=True)
@@ -121,7 +121,7 @@ class Project(models.Model):
 
     def save(self, *args, **kwargs):
         """Autogenerates the slug based on the title"""
-        self.slug = slugify(self.title)
+        self.slug = slugify(self.title) or 'project'
         super(Project, self).save(*args, **kwargs)
 
     def get_absolute_url(self):

@@ -9,7 +9,7 @@ from django.db import models
 from django.template.defaultfilters import slugify
 from django.utils.safestring import mark_safe
 
-from datetime import date, datetime
+from datetime import date
 from djgeojson.fields import PointField
 from easy_thumbnails.fields import ThumbnailerImageField
 from email.utils import parseaddr
@@ -232,7 +232,7 @@ class Agency(models.Model, RequestHelper):
             Profile.objects.create(
                     user=user,
                     acct_type='agency',
-                    date_update=datetime.now(),
+                    date_update=date.today(),
                     agency=self,
                     )
             return user
