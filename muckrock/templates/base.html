@@ -1,6 +1,7 @@
 {% load static from staticfiles %}
 {% load compress %}
 {% load render_bundle from webpack_loader %}
+{% load hijack_tags %}
 <!doctype html>
 
 <html>
@@ -51,6 +52,7 @@
             }
         </style>
         <link rel="stylesheet" type="text/css" href="{% static 'autocomplete_light/style.css' %}" />
+        <link rel="stylesheet" type="text/css" href="{% static 'hijack/hijack-styles.css' %}" />
         {% render_bundle 'main' 'css' %}
         {% endcompress %}
         {% block styles %}
@@ -79,6 +81,7 @@
         {% endblock twitter_card %}
     </head>
     <body>
+        {% hijack_notification %}
         {% block body %}
         <div class="container">
             <div id="modal-overlay"></div>
@@ -139,7 +142,6 @@
             }
         </script>
         <!-- End Google Analytics -->
-        <script src="https://assets.documentcloud.org/viewer/loader.js" type="text/javascript"></script>
         {% compress js %}
         {% render_bundle 'main' 'js' %}
         <script type="text/javascript" src="{% static 'autocomplete_light/django_admin.js' %}"></script>
@@ -149,8 +151,6 @@
         <script type="text/javascript" src="{% static 'autocomplete_light/text_widget.js' %}"></script>
         <script type="text/javascript" src="{% static 'autocomplete_light/remote.js' %}"></script>
         {% endcompress %}
-        <script src="//cdn.optimizely.com/js/2610441018.js"></script>
-        <script src="https://checkout.stripe.com/checkout.js" type="text/javascript"></script>
         {% block scripts %}
         {% endblock scripts %}
         <!-- END SCRIPTS -->

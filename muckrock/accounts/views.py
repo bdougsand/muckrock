@@ -71,6 +71,7 @@ from muckrock.message.tasks import (
         gift,
         )
 from muckrock.views import MRFilterListView
+from muckrock.utils import stripe_retry_on_error
 
 logger = logging.getLogger(__name__)
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -340,15 +341,16 @@ def buy_requests(request, username=None):
             if not stripe_token or not stripe_email:
                 raise KeyError('Missing Stripe payment data.')
             # take from the purchaser
-            stripe.Charge.create(
-                amount=request_price,
-                currency='usd',
-                source=stripe_token,
-                metadata={
-                    'email': stripe_email,
-                    'action': 'request-purchase',
-                }
-            )
+            stripe_retry_on_error(
+                    stripe.Charge.create,
+                    amount=request_price,
+                    currency='usd',
+                    source=stripe_token,
+                    metadata={
+                        'email': stripe_email,
+                        'action': 'request-purchase',
+                        }
+                    )
             # and give to the recipient
             recipient.profile.num_requests += request_count
             recipient.profile.save()
@@ -407,6 +409,12 @@ def profile(request, username=None):
         else:
             return redirect('acct-profile', username=request.user.username)
     user = get_object_or_404(User, username=username)
+    if (request.method == "POST" and
+            request.user.is_staff and
+            request.POST.get('action') == 'cancel-pro'):
+        user.profile.cancel_pro_subscription()
+        messages.success(request, 'Pro account has been cancelled')
+        return redirect('acct-profile', username=username)
     user_profile = user.profile
     org = user_profile.organization
     show_org_link = (

@@ -13,6 +13,7 @@ from django.views.generic import TemplateView
 
 import logging
 from datetime import datetime
+from django_filters import FilterSet
 
 from muckrock.agency.forms import AgencyForm
 from muckrock.agency.models import Agency, STALE_DURATION
@@ -84,6 +85,13 @@ class TaskList(MRFilterListView):
             if queryset.count() == 0:
                 raise Http404()
         return queryset
+
+    def get_filter(self):
+        """Return an empter filter set if we are looking at a specific task"""
+        if 'pk' in self.kwargs:
+            return FilterSet(queryset=self.get_queryset(), request=self.request)
+        else:
+            return super(TaskList, self).get_filter()
 
     def get_model(self):
         """Returns the model from the class"""

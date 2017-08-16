@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 class MimeError(Exception):
     """Try to attach a file with a disallowed mime type"""
 
+
 class FOIARequestViewSet(viewsets.ModelViewSet):
     """
     API views for FOIARequest
@@ -90,18 +91,25 @@ class FOIARequestViewSet(viewsets.ModelViewSet):
             jurisdiction = Jurisdiction.objects.get(pk=int(data['jurisdiction']))
             agency = Agency.objects.get(pk=int(data['agency']), jurisdiction=jurisdiction)
 
-            requested_docs = data['document_request']
-            template = get_template('text/foia/request.txt')
-            context = RequestContext(request, {
-                'document_request': requested_docs,
-                'jurisdiction': jurisdiction,
-                'user_name': request.user.get_full_name,
-                })
-            text = template.render(context)
+            embargo = data.get('embargo', False)
+
+            if 'full_text' in data:
+                text = data['full_text']
+                requested_docs = data.get('document_request', '')
+            else:
+                requested_docs = data['document_request']
+                template = get_template('text/foia/request.txt')
+                context = RequestContext(request, {
+                    'document_request': requested_docs,
+                    'jurisdiction': jurisdiction,
+                    'user_name': request.user.get_full_name,
+                    })
+                text = template.render(context)
+
             title = data['title']
 
             slug = slugify(title) or 'untitled'
-            foia = FOIARequest.objects.create(
+            foia = FOIARequest(
                     user=request.user,
                     status='started',
                     title=title,
@@ -110,7 +118,14 @@ class FOIARequestViewSet(viewsets.ModelViewSet):
                     agency=agency,
                     requested_docs=requested_docs,
                     description=requested_docs,
+                    embargo=embargo,
                     )
+            if embargo and not foia.has_perm(request.user, 'embargo'):
+                return Response(
+                    {'status': 'You do not have permission to embargo requests.'},
+                    status=http_status.HTTP_400_BAD_REQUEST,
+                    )
+            foia.save()
 
             comm = FOIACommunication.objects.create(
                     foia=foia,

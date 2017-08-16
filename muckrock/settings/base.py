@@ -182,6 +182,7 @@ INSTALLED_APPS = (
     'django_premailer',
     'djangosecure',
     'djcelery',
+    'djcelery_email',
     'djgeojson',
     'easy_thumbnails',
     'gunicorn',
@@ -206,6 +207,8 @@ INSTALLED_APPS = (
     'image_diet',
     'django_hosts',
     'queued_storage',
+    'hijack',
+    'compat', # for hijack
     'muckrock.accounts',
     'muckrock.foia',
     'muckrock.news',
@@ -416,6 +419,8 @@ PHAXIO_BATCH_DELAY = os.environ.get('PHAXIO_BATCH_DELAY', 300)
 PHAXIO_CALLBACK_TOKEN = os.environ.get('PHAXIO_CALLBACK_TOKEN')
 
 SLACK_WEBHOOK_URL = os.environ.get('SLACK_WEBHOOK_URL', '')
+
+STACKIMPACT_AGENT_KEY = os.environ.get('STACKIMPACT_AGENT_KEY', '')
 
 PUBLICATION_NAME = 'MuckRock'
 PUBLICATION_TIME_ZONE = '-05:00'
