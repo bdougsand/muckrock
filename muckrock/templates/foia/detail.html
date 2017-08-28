@@ -16,7 +16,7 @@
 <meta property="og:title" content="{{ foia.title }}" />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="{{ request.build_absolute_uri }}" />
-<meta property="og:description" content="{{ foia.user.get_full_name }} {% if foia.date_done %}made{% else %}is making{% endif %} this request{% if foia.agency %} to {{ foia.agency.name }} of {% if foia.jurisdiction.name = 'United States of America' %}the {% endif %}{{ foia.jurisdiction.name }}.{% endif %}" />
+<meta property="og:description" content="{{ foia.user.get_full_name }} {% if foia.date_done %}made{% else %}is making{% endif %} this request{% if foia.agency %} to {{ foia.agency.name }} of {% if foia.jurisdiction.name == 'United States of America' %}the {% endif %}{{ foia.jurisdiction.name }}.{% endif %}" />
 <meta property="og:site_name" content="MuckRock" />
 {% endcache %}
 {% endblock open_graph %}
@@ -29,7 +29,7 @@
 <meta name="twitter:creator" content="{{ foia.user.profile.twitter }}" />
 {% endif %}
 <meta name="twitter:title" content="{{ foia.title }}" />
-<meta name="twitter:description" content="{{ foia.user.get_full_name }} {% if foia.date_done %}made{% else %}is making{% endif %} this request{% if foia.agency %} to {{ foia.agency.name }} of {% if foia.jurisdiction.name = 'United States of America' %}the {% endif %}{{ foia.jurisdiction.name }}.{% endif %}" />
+<meta name="twitter:description" content="{{ foia.user.get_full_name }} {% if foia.date_done %}made{% else %}is making{% endif %} this request{% if foia.agency %} to {{ foia.agency.name }} of {% if foia.jurisdiction.name == 'United States of America' %}the {% endif %}{{ foia.jurisdiction.name }}.{% endif %}" />
 {% endcache %}
 {% endblock twitter_card %}
 
@@ -242,7 +242,7 @@
                                 <input type="hidden" name="action" value="follow_up" />
                                 <textarea name="text" id="follow-up-composer"></textarea>
                                 <label class="bold">Attachments</label>
-                                <div id="fine-uploader"></div>
+                                <div id="fine-uploader-follow-up" class="fine-uploader"></div>
                                 <div class="buttons">
                                     <button class="primary button" type="submit" name="appeal" value="1">Send</button>
                                     <a href="#inactive" class="button cancel">Cancel</a>
@@ -278,7 +278,7 @@ Sincerely,
                                 {% csrf_token %}
                                 {% include 'lib/pattern/form.html' with form=agency_reply_form %}
                                 <label class="bold">Attachments</label>
-                                <div id="fine-uploader1"></div>
+                                <div id="fine-uploader-agency-rpely" class="fine-uploader"></div>
 								<input type="hidden" name="action" value="agency_reply" />
                                 <div class="buttons">
                                     <button class="primary button" type="submit" name="agency-reply" value="1">Send</button>
@@ -314,6 +314,8 @@ Sincerely,
                                 {% endif %}
                                 {% csrf_token %}
                                 <textarea name="text" id="appeal-composer"></textarea>
+                                <label class="bold">Attachments</label>
+                                <div id="fine-uploader-appeal" class="fine-uploader"></div>
                                 <div class="buttons">
                                     <a href="#inactive" class="button">Cancel</a>
                                     <button class="primary button" type="submit" name="action" value="appeal">Send Appeal</button>
