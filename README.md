@@ -70,3 +70,4 @@ The `master` branch represents our product code. `master` should only ever be up
 [virtualbox]: https://www.virtualbox.org
 [codecov-img]:https://codecov.io/github/MuckRock/muckrock/coverage.svg?token=SBg37XM3j1&branch=master
 [codecov]: https://codecov.io/github/MuckRock/muckrock?branch=master
+
