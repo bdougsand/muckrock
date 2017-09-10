@@ -348,7 +348,8 @@ def buy_requests(request, username=None):
                     metadata={
                         'email': stripe_email,
                         'action': 'request-purchase',
-                        }
+                        },
+                    idempotency_key=True,
                     )
             # and give to the recipient
             recipient.profile.num_requests += request_count

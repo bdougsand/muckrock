@@ -30,7 +30,6 @@ TEMPLATES[0]['OPTIONS']['loaders'] = [
         'django.template.loaders.app_directories.Loader',
         ],
     )]
-
 del TEMPLATES[0]['APP_DIRS']
 
 if 'MEMCACHIER_SERVERS' in os.environ:

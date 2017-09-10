@@ -471,7 +471,8 @@ class DonationFormView(StripeFormMixin, FormView):
                     metadata={
                         'email': email,
                         'action': 'donation'
-                        }
+                        },
+                    idempotency_key=True,
                     )
         except stripe.error.CardError:
             # card declined
