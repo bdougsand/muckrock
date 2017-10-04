@@ -12,14 +12,15 @@ from datetime import datetime
 
 from muckrock.foia.models import FOIACommunication, STATUS
 
-def save_foia_comm(foia, from_who, comm, user, appeal=False,
+# TODO this shouldnt be here
+def save_foia_comm(foia, from_user, comm, user, appeal=False,
         snail=False, thanks=False, subject=''):
     """Save the FOI Communication"""
     #pylint:disable=too-many-arguments
     FOIACommunication.objects.create(
         foia=foia,
-        from_who=from_who,
-        to_who=foia.get_to_who(),
+        from_user=from_user,
+        to_user=foia.get_to_user(),
         date=datetime.now(),
         response=False,
         full_html=False,
@@ -63,6 +64,8 @@ def delete_comm(request, next_):
 @user_passes_test(lambda u: u.is_staff)
 def resend_comm(request, next_):
     """Resend the FOI Communication"""
+    # XXX this needs an autocomplete form for the email field
+    # also allow for creation of new emails
     try:
         comm = FOIACommunication.objects.get(pk=request.POST['comm_pk'])
         comm.resend(request.POST['email'])
@@ -92,6 +95,7 @@ def change_comm_status(request, next_):
         messages.error(request, 'The communication does not exist.')
     return redirect(next_)
 
+# XXX redo this to account for the possibility of multiple emails per communication now
 @user_passes_test(lambda u: u.is_authenticated() and u.profile.is_advanced())
 def raw(request, idx):
     """Get the raw email for a communication"""

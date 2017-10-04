@@ -23,6 +23,14 @@ from reversion import revisions as reversion
 from taggit.managers import TaggableManager
 
 from muckrock.accounts.models import Notification
+from muckrock.communication.models import (
+        EmailAddress,
+        PhoneNumber,
+        Address,
+        EmailCommunication,
+        FaxCommunication,
+        MailCommunication,
+        )
 from muckrock.models import ExtractDay, Now
 from muckrock.tags.models import Tag, TaggedItemBase, parse_tags
 from muckrock import task
@@ -230,8 +238,29 @@ class FOIARequest(models.Model):
     tracking_id = models.CharField(blank=True, max_length=255)
     mail_id = models.CharField(blank=True, max_length=255, editable=False)
     updated = models.BooleanField(default=False)
+
+    # XXX dont just assume we are sending to email anymore
     email = models.CharField(blank=True, max_length=254)
     other_emails = fields.EmailsListField(blank=True, max_length=255)
+    # new fields
+    # XXX name claseh
+    email = models.ForeignKey(
+            'communication.EmailAddress',
+            related_name='foias',
+            )
+    cc_emails = models.ManyToManyField(
+            'communication.EmailAddress',
+            related_name='cc_foias',
+            )
+    fax = models.ForeignKey(
+            'communication.PhoneNumber',
+            related_name='foias',
+            )
+    address = models.ForeignKey(
+            'communication.Address',
+            related_name='foias',
+            )
+
     times_viewed = models.IntegerField(default=0)
     disable_autofollowups = models.BooleanField(default=False)
     missing_proxy = models.BooleanField(default=False,
@@ -449,15 +478,14 @@ class FOIARequest(models.Model):
 
     def get_other_emails(self):
         """Get the other emails for this request as a list"""
-        # Adding blank emails here breaks mailgun backend
-        return [e for e in fields.email_separator_re.split(self.other_emails) if e]
+        return self.cc_emails.all()
 
-    def get_to_who(self):
+    def get_to_user(self):
         """Who communications are to"""
         if self.agency:
-            return self.agency.name
+            return self.agency.get_user()
         else:
-            return ''
+            return None
 
     def get_saved(self):
         """Get the old model that is saved in the db"""
@@ -511,71 +539,69 @@ class FOIARequest(models.Model):
         The only difference between a thanks andother submissions is that we do
         not set the request status, unless the request requires a proxy.
         """
+        if not self.agency:
+            # XXX this should not happen
+            # XXX make sure we catch this
+            raise ValueError('Trying to submit a request without an agency.')
 
-        # can email appeal if the agency has an appeal agency which has an email address
-        # and can accept emailed appeals
-        can_email_appeal = (
-                appeal and
-                self.agency and
-                self.agency.appeal_agency and
-                self.agency.appeal_agency.email and
-                self.agency.appeal_agency.can_email_appeals
-                )
-        # update email addresses for the request
-        if can_email_appeal:
-            self.email = self.agency.appeal_agency.get_email()
-            self.other_emails = self.agency.appeal_agency.other_emails
-        elif not self.email and self.agency:
-            self.email = self.agency.get_email()
-            self.other_emails = self.agency.other_emails
+        if appeal and self.agency.appeal_agency:
+            agency = self.agency.appeal_agency
+        else:
+            agency = self.agency
+
+        self.update_current_address(agency, appeal)
+
         # if agency isnt approved, do not email or snail mail
         # it will be handled after agency is approved
-        approved_agency = self.agency and self.agency.status == 'approved'
-        can_email = self.email and not appeal and not self.missing_proxy
-        comm = self.last_comm()
-        # if the request can be emailed, email it, otherwise send a notice to the admin
-        # if this is a thanks, send it as normal but do not change the status
-        if not snail and approved_agency and (can_email or can_email_appeal):
-            if appeal and not thanks:
-                self.status = 'appealing'
-            elif self.has_ack() and not thanks:
-                self.status = 'processed'
-            elif not thanks:
-                self.status = 'ack'
-            self._send_msg()
-            self.update_dates()
-        elif self.missing_proxy:
-            # flag for proxy re-submitting
-            self.status = 'submitted'
-            self.date_processing = date.today()
-            task.models.FlaggedTask.objects.create(
-                    foia=self,
-                    text='This request was filed for an agency requiring a '
-                    'proxy, but no proxy was available.  Please add a suitable '
-                    'proxy for the state and refile it with a note that the '
-                    'request is being filed by a state citizen. Make sure the '
-                    'new request is associated with the original user\'s '
-                    'account. To add someone as a proxy, change their user type '
-                    'to "Proxy" and make sure they properly have their state '
-                    'set on the backend.  This message should only appear when '
-                    'a suitable proxy does not exist.'
-                    )
-        elif approved_agency:
-            # snail mail it
-            if not thanks:
-                self.status = 'submitted'
-                self.date_processing = date.today()
-            notice = 'n' if self.communications.count() == 1 else 'u'
-            notice = 'a' if appeal else notice
-            comm.delivered = 'mail'
-            comm.save()
-            task.models.SnailMailTask.objects.create(category=notice, communication=comm)
-        elif not thanks:
-            # there should never be a thanks to an unapproved agency
+        approved_agency = agency.status == 'approved'
+
+        if self.missing_proxy:
+            self._flag_proxy_resubmit()
+        elif not approved_agency:
             # not an approved agency, all we do is mark as submitted
             self.status = 'submitted'
             self.date_processing = date.today()
+        else:
+            self._send_msg(appeal=appeal, thanks=thanks, snail=snail)
+            self.update_dates()
         self.save()
+
+    def update_current_address(self, agency, appeal):
+        """Update the current address for the request"""
+        # if this is an appeal, clear the current addresses and get them
+        # from the appeal agency
+        if appeal:
+            self.email = None
+            self.cc_emails.clear()
+            self.fax = None
+            self.address = None
+            request_type = 'appeal'
+        else:
+            request_type = 'primary'
+        # if no addresses are set, pull them from the agency
+        if not self.email and not self.fax and not self.address:
+            self.email = agency.get_emails(request_type, 'to').first()
+            self.cc_emails.set(agency.get_emails(request_type, 'cc'))
+            self.fax = agency.get_fax(request_type)
+            self.address = agency.get_address(request_type)
+        self.save()
+
+    def _flag_proxy_resubmit(self):
+        """Flag this request to be re-submitted with a proxy"""
+        self.status = 'submitted'
+        self.date_processing = date.today()
+        task.models.FlaggedTask.objects.create(
+                foia=self,
+                text='This request was filed for an agency requiring a '
+                'proxy, but no proxy was available.  Please add a suitable '
+                'proxy for the state and refile it with a note that the '
+                'request is being filed by a state citizen. Make sure the '
+                'new request is associated with the original user\'s '
+                'account. To add someone as a proxy, change their user type '
+                'to "Proxy" and make sure they properly have their state '
+                'set on the backend.  This message should only appear when '
+                'a suitable proxy does not exist.'
+                )
 
     def process_attachments(self, user):
         """Attach all outbound attachments to the last communication"""
@@ -599,8 +625,6 @@ class FOIARequest(models.Model):
 
     def followup(self, automatic=False, show_all_comms=True):
         """Send a follow up email for this request"""
-        from muckrock.foia.models.communication import FOIACommunication
-
         if self.date_estimate and date.today() < self.date_estimate:
             estimate = 'future'
         elif self.date_estimate:
@@ -608,42 +632,27 @@ class FOIARequest(models.Model):
         else:
             estimate = 'none'
 
-        comm = FOIACommunication.objects.create(
-            foia=self, from_who='MuckRock.com', to_who=self.get_to_who(),
-            date=datetime.now(), response=False, full_html=False, autogenerated=automatic,
-            communication=render_to_string('text/foia/followup.txt',
-                {'request': self, 'estimate': estimate}))
+        self.communications.create(
+            from_user=user.objects.get(username='MuckrockStaff'), # XXX ensure muckrock user exists
+            to_who=self.get_to_user(),
+            date=datetime.now(),
+            response=False,
+            autogenerated=automatic,
+            communication=render_to_string(
+                'text/foia/followup.txt',
+                {'request': self, 'estimate': estimate}
+                ))
 
-        if not self.email and self.agency:
-            self.email = self.agency.get_email()
-            self.other_emails = self.agency.other_emails
-            self.save()
-
-        if self.email:
-            self._send_msg(show_all_comms)
-        else:
-            self.status = 'submitted'
-            self.date_processing = date.today()
-            self.save()
-            comm.delivered = 'mail'
-            comm.save()
-            task.models.SnailMailTask.objects.create(category='f', communication=comm)
-
-        # Do not self.update() here for now to avoid excessive emails
-        self.update_dates()
+        self.submit(followup=True)
 
     def appeal(self, appeal_message, user):
         """Send a followup to the agency or its appeal agency."""
-        from muckrock.foia.models.communication import FOIACommunication
-        communication = FOIACommunication.objects.create(
-            foia=self,
-            from_who=self.user.get_full_name(),
-            to_who=self.get_to_who(),
+        communication = self.communications.create(
+            from_user=user,
+            to_who=self.get_to_user(),
             date=datetime.now(),
             communication=appeal_message,
             response=False,
-            full_html=False,
-            autogenerated=False
         )
         self.process_attachments(user)
         self.submit(appeal=True)
@@ -657,66 +666,50 @@ class FOIARequest(models.Model):
         Since collaborators may make payments, we do not assume the user is the request creator.
         Returns the communication that was generated.
         """
-        from muckrock.foia.models.communication import FOIACommunication
-        from muckrock.task.models import SnailMailTask
-        # We mark the request as processing
-        self.status = 'submitted'
-        self.date_processing = date.today()
-        self.save()
         # We create the payment communication and a snail mail task for it.
         payable_to = self.agency.payable_to if self.agency else None
-        comm = FOIACommunication.objects.create(
-            foia=self,
-            from_who='MuckRock.com',
-            to_who=self.get_to_who(),
+        comm = self.communications.create(
+            from_user=User.objects.get(username='MuckrockStaff'),
+            to_user=self.get_to_user(),
             date=datetime.now(),
-            delivered='mail',
             response=False,
-            full_html=False,
-            autogenerated=False,
-            communication=render_to_string('message/communication/payment.txt', {
-                'amount': amount,
-                'payable_to': payable_to
-            }))
-        SnailMailTask.objects.create(
-            communication=comm,
-            category='p',
-            user=user,
-            amount=amount
-        )
+            communication=render_to_string(
+                'message/communication/payment.txt',
+                {
+                    'amount': amount,
+                    'payable_to': payable_to,
+                    }))
+        self.submit(payment=True, snail=True, amount=amount)
         # We perform some logging and activity generation
         logger.info('%s has paid %0.2f for request %s', user.username, amount, self.title)
         utils.new_action(user, 'paid fees', target=self)
         # We return the communication we generated, in case the caller wants to do anything with it
         return comm
 
-    def _send_msg(self, show_all_comms=True):
-        """Send a message for this request as an email or fax"""
-        # self.email should be set before calling this method
+    def _send_msg(self, **kwargs):
+        """Send a message for this request"""
+        # self.email / self.fax / self.address should be set
+        # before calling thismethod
 
-        # get last comm to set delivered and raw_email
         comm = self.communications.last()
         subject = comm.subject or self.default_subject()
         subject = subject[:255]
+        comm.subject = subject
 
         # pylint:disable=attribute-defined-outside-init
         self.reverse_communications = self.communications.reverse()
-        is_email = not all(c.isdigit() for c in self.email)
-        context = {'request': self, 'show_all_comms': show_all_comms}
-        if is_email:
-            context['reply_link'] = self.get_agency_reply_link(self.email)
-        body = render_to_string(
-            'text/foia/request_email.txt',
-            context,
-            )
 
-        # send the msg
-        if is_email:
-            self._send_email(subject, body, comm)
+        # preferred order of communication methods
+        if self.email and not kwargs['snail']:
+            self._send_email(comm, **kwargs)
+        elif self.fax and not kwargs['snail']:
+            self._send_fax(comm, **kwargs)
+        elif self.address:
+            self._send_snail_mail(comm, **kwargs)
         else:
-            self._send_fax(subject, body, comm)
+            # XXX shouldnt happen, catch this
+            raise ValueError('No where to send to')
 
-        comm.subject = subject
         comm.save()
 
         # unblock incoming messages if we send one out
@@ -740,46 +733,105 @@ class FOIARequest(models.Model):
                 email=email,
                 )
 
-
-    def _send_email(self, subject, body, comm):
+    def _send_email(self, comm, appeal, thanks, show_all_comms):
         """Send the message as an email"""
 
         from_addr = self.get_mail_id()
-        cc_addrs = self.get_other_emails()
-        from_email = '%s@%s' % (from_addr, settings.MAILGUN_SERVER_NAME)
+        from_email = EmailAddress.objects.get_or_create(
+                email='%s@%s' % (from_addr, settings.MAILGUN_SERVER_NAME),
+                )
+
+        context = {
+                'request': self,
+                'show_all_comms': show_all_comms,
+                'reply_link': self.get_agency_reply_link(to_emails[0]),
+                }
+        body = render_to_string(
+            'text/foia/request_email.txt',
+            context,
+            )
+
+        self.status = self._sent_status(appeal, thanks)
+
+        email_comm = EmailCommunication.objects.create(
+                communication=comm,
+                sent_datetime=datetime.now(),
+                from_email=from_email,
+                to_emails=to_emails,
+                cc_emails=cc_emails,
+                )
         msg = EmailMultiAlternatives(
-            subject=subject,
-            body=body,
-            from_email=from_email,
-            to=[self.email],
-            bcc=cc_addrs + ['diagnostics@muckrock.com'],
-            headers={
-                'Cc': ','.join(cc_addrs),
-                'X-Mailgun-Variables': {'comm_id': comm.pk}
-            }
-        )
+                subject=comm.subject,
+                body=body,
+                from_email=str(from_email),
+                to=str(self.email),
+                cc=[str(e) for e in self.cc_emails.all()],
+                bcc=['diagnostics@muckrock.com'],
+                headers={
+                    'X-Mailgun-Variables':
+                    {'email_id': email_comm.pk},
+                    }
+                )
         msg.attach_alternative(linebreaks(escape(body)), 'text/html')
         # atach all files from the latest communication
-        for file_ in comm.files.all():
-            name = file_.name()
-            content = file_.ffile.read()
-            mimetype, _ = mimetypes.guess_type(name)
-            if mimetype and mimetype.startswith('text/'):
-                enc = chardet.detect(content)['encoding']
-                content = content.decode(enc)
-            msg.attach(name, content)
+        comm.attach_files(msg)
 
         msg.send(fail_silently=False)
 
-        # update communication
-        comm.set_raw_email(msg.message())
-        comm.delivered = 'email'
+        email_comm.set_raw_email(msg.message())
 
-    def _send_fax(self, subject, body, comm):
+    def _send_fax(self, comm, appeal, thanks, show_all_comms):
         """Send the message as a fax"""
-        # pylint: disable=no-self-use
         from muckrock.foia.tasks import send_fax
-        send_fax.apply_async(args=[comm.pk, subject, body])
+
+        context = {
+                'request': self,
+                'show_all_comms': show_all_comms,
+                }
+        body = render_to_string(
+            'text/foia/request_email.txt',
+            context,
+            )
+        self.status = self._sent_status(appeal, thanks)
+
+        send_fax.apply_async(args=[comm.pk, comm.subject, body])
+
+    def _send_snail_mail(self, comm, **kwargs):
+        """Send the message as a snail mail"""
+        if not kwargs.get('thanks'):
+            self.status = 'submitted'
+            self.date_processing = date.today()
+        if self.communications.count() == 1:
+            category = 'n'
+        elif kwargs.get('appeal'):
+            category = 'a'
+        elif kwargs.get('followup'):
+            category = 'f'
+        elif kwargs.get('payment'):
+            category = 'p'
+        else:
+            category = 'u'
+        if 'amount' in kwargs:
+            extra = {'amount': amount}
+        else:
+            extra = {}
+        task.models.SnailMailTask.objects.create(
+                category=category,
+                communication=comm,
+                #address=self.address, # XXX is this needed? if not should we double check the address on the comm once it is sent?
+                **extra
+                )
+
+    def _sent_status(self, appeal, thanks):
+        """After sending out the message, set the correct new status"""
+        if thanks:
+            return self.status
+        elif appeal:
+            return 'appealing'
+        elif self.has_ack():
+            return 'processed'
+        else:
+            return 'ack'
 
     def update_dates(self):
         """Set the due date, follow up date and days until due attributes"""
@@ -999,3 +1051,4 @@ class FOIARequest(models.Model):
             ('agency_reply_foiarequest', 'Can send a direct reply'),
             ('upload_attachment_foiarequest', 'Can upload an attachment'),
             )
+

@@ -12,7 +12,6 @@ from django.utils.safestring import mark_safe
 from datetime import date
 from djgeojson.fields import PointField
 from easy_thumbnails.fields import ThumbnailerImageField
-from email.utils import parseaddr
 import logging
 
 from muckrock.accounts.models import Profile
@@ -69,6 +68,7 @@ class Agency(models.Model, RequestHelper):
         ), max_length=8, default='pending')
     user = models.ForeignKey(User, null=True, blank=True)
     appeal_agency = models.ForeignKey('self', null=True, blank=True)
+    # XXX this goes away
     can_email_appeals = models.BooleanField(default=False)
     payable_to = models.ForeignKey('self', related_name='receivable', null=True, blank=True)
     image = ThumbnailerImageField(
@@ -82,17 +82,38 @@ class Agency(models.Model, RequestHelper):
     stale = models.BooleanField(default=False)
     manual_stale = models.BooleanField(default=False,
         help_text='For marking an agency stale by hand.')
-    address = models.TextField(blank=True)
     location = PointField(blank=True)
+
+    # XXX change address to FK (or M2M?)
+    address = models.TextField(blank=True)
+    addresses = models.ManyToManyField(
+            'communication.Address',
+            through='AgencyAddress',
+            related_name='agencies',
+            )
+    # XXX change email, other_emails to M2M (with a through table for type?)
     email = models.EmailField(blank=True)
     other_emails = fields.EmailsListField(blank=True, max_length=255)
+    emails = models.ManyToManyField(
+            'communication.EmailAddress',
+            through='AgencyEmail',
+            related_name='agencies',
+            )
+    # XXX what to do with contact information?
     contact_salutation = models.CharField(blank=True, max_length=30)
     contact_first_name = models.CharField(blank=True, max_length=100)
     contact_last_name = models.CharField(blank=True, max_length=100)
     contact_title = models.CharField(blank=True, max_length=255)
-    url = models.URLField(blank=True, verbose_name='FOIA Web Page', help_text='Begin with http://')
+    # XXX change phone/fax to M2M
     phone = models.CharField(blank=True, max_length=30)
     fax = models.CharField(blank=True, max_length=30)
+    phones = models.ManyToManyField(
+            'communication.PhoneNumber',
+            through='AgencyPhone',
+            related_name='agencies',
+            )
+
+    url = models.URLField(blank=True, verbose_name='FOIA Web Page', help_text='Begin with http://')
     notes = models.TextField(blank=True)
     aliases = models.TextField(blank=True)
     parent = models.ForeignKey('self', null=True, blank=True, related_name='children')
@@ -125,13 +146,13 @@ class Agency(models.Model, RequestHelper):
 
     def save(self, *args, **kwargs):
         """Save the agency"""
-        self.email = self.email.strip()
         self.slug = slugify(self.slug)
         self.name = self.name.strip()
         super(Agency, self).save(*args, **kwargs)
 
     def normalize_fax(self):
         """Return a fax number suitable for use with phaxio"""
+        # XXX this foes away
 
         fax = ''.join(c for c in self.fax if c.isdigit())
         if len(fax) == 10:
@@ -139,20 +160,6 @@ class Agency(models.Model, RequestHelper):
         if len(fax) == 11 and fax[0] == '1':
             return fax
         return None
-
-    def get_email(self):
-        """Returns an email address to send to"""
-
-        if self.email:
-            return self.email
-        elif self.normalize_fax():
-            return self.normalize_fax()
-        else:
-            return ''
-
-    def get_other_emails(self):
-        """Returns other emails as a list"""
-        return fields.email_separator_re.split(self.other_emails)
 
     def link_display(self):
         """Returns link if approved"""
@@ -237,16 +244,83 @@ class Agency(models.Model, RequestHelper):
                     )
             return user
 
-    def get_all_known_emails(self):
-        """Get all emails we have associated with this agency"""
-        emails = (FOIACommunication.objects
-                .filter(foia__agency=self, response=True)
-                .distinct()
-                .values_list('priv_from_who', flat=True)
-                .order_by()
+    # XXX new, test
+    def get_emails(self, request_type, email_type):
+        """Get the specified type of email addresses for this agency"""
+        return self.emails.filter(
+                agencyemail__request_type=request_type,
+                agencyemail__email_type=email_type,
                 )
-        return [parseaddr(e)[1].lower() for e in emails if parseaddr(e)[1]]
+
+    def get_fax(self, request_type):
+        """Get the contact fax number"""
+        return self.phones.filter(
+                type='fax',
+                agencyphone__request_type=request_type,
+                )
+
+    def get_address(self, request_type):
+        """Get the contact address"""
+        return self.address.filter(
+                agencyaddress__request_type=request_type,
+                )
 
     class Meta:
         # pylint: disable=too-few-public-methods
         verbose_name_plural = 'agencies'
+
+
+REQUEST_TYPES = (
+        ('primary', 'Primary'),
+        ('appeal', 'Appeal'),
+        ('none', 'None'),
+        )
+
+
+EMAIL_TYPES = (
+        ('to', 'To'),
+        ('cc', 'CC'),
+        ('none', 'None'),
+        )
+
+# pylint: model-missing-unicode
+
+class AgencyAddress(models.Model):
+    """Through model for agency to address M2M"""
+
+    agency = models.ForeignKey(Agency)
+    address = models.ForeignKey('communication.Address')
+    request_type = models.CharField(
+            max_length=7,
+            choices=REQUEST_TYPES,
+            default='none',
+            )
+
+
+class AgencyEmail(models.Model):
+    """Through model for agency to email M2M"""
+
+    agency = models.ForeignKey(Agency)
+    email = models.ForeignKey('communication.EmailAddress')
+    request_type = models.CharField(
+            max_length=7,
+            choices=REQUEST_TYPES,
+            default='none',
+            )
+    email_type = models.CharField(
+            max_length=4,
+            choices=EMAIL_TYPES,
+            default='none',
+            )
+
+
+class AgencyPhone(models.Model):
+    """Through model for agency to phone M2M"""
+
+    agency = models.ForeignKey(Agency)
+    phone = models.ForeignKey('communication.PhoneNumber')
+    request_type = models.CharField(
+            max_length=7,
+            choices=REQUEST_TYPES,
+            default='none',
+            )

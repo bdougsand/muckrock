@@ -17,6 +17,7 @@ from django_filters import FilterSet
 
 from muckrock.agency.forms import AgencyForm
 from muckrock.agency.models import Agency
+from muckrock.communication.models import MailCommunication
 from muckrock.foia.models import STATUS, FOIARequest, FOIACommunication, FOIAFile
 from muckrock.task.filters import (
     TaskFilterSet,
@@ -225,13 +226,19 @@ class SnailMailTaskList(TaskList):
         if status:
             task.set_status(status)
             # updating the date is an option and not an action
+            # XXX we should get rid of updating the date
             if request.POST.get('update_date'):
                 task.update_date()
         # if the task is in the payment category and we're given a check
         # number, then we should record the existence of this check
         if check_number and task.category == 'p':
             task.record_check(check_number, request.user)
-        task.communication.confirmed = datetime.now()
+        MailCommunication.objects.create(
+                communication=task.communication,
+                sent_datetime=datetime.now(),
+                #from_address= ,#XXX from our current address?
+                to_address=task.communication.foia.address,
+                )
         task.communication.save()
         task.resolve(request.user)
         return super(SnailMailTaskList, self).task_post_helper(request, task)

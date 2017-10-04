@@ -22,6 +22,7 @@ import logging
 from muckrock.accounts.models import Notification
 from muckrock.agency.forms import AgencyForm
 from muckrock.agency.models import Agency
+from muckrock.communication.models import WebCommunication
 from muckrock.crowdfund.forms import CrowdfundForm
 from muckrock.foia.codes import CODES
 from muckrock.foia.filters import (
@@ -145,6 +146,7 @@ class RequestExploreView(TemplateView):
             .get_public_file_count(limit=5))
         return context
 
+
 class RequestList(MRSearchFilterListView):
     """Base list view for other list views to inherit from"""
     model = FOIARequest
@@ -254,10 +256,10 @@ class FormError(Exception):
     """If a form fails validation"""
 
 
-# pylint: disable=no-self-use
 class Detail(DetailView):
     """Details of a single FOIA request as well
     as handling post actions for the request"""
+    # pylint: disable=no-self-use
 
     model = FOIARequest
     context_object_name = 'foia'
@@ -314,7 +316,7 @@ class Detail(DetailView):
             prefetch_related=(
                 'communications',
                 'communications__files',
-                Prefetch('communications__rawemail', RawEmail.objects.defer('raw_email')),
+                Prefetch('communications__emails__rawemail', RawEmail.objects.defer('raw_email')),
                 ),
         )
         valid_access_key = self.request.GET.get('key') == foia.access_key
@@ -359,8 +361,8 @@ class Detail(DetailView):
         })
         context['embargo_needs_date'] = foia.status in END_STATUS
         context['user_actions'] = foia.user_actions(user)
-        context['contextual_request_actions'] = \
-                foia.contextual_request_actions(user, user_can_edit)
+        context['contextual_request_actions'] = (
+                foia.contextual_request_actions(user, user_can_edit))
         context['status_choices'] = STATUS if include_draft else STATUS_NODRAFT
         context['show_estimated_date'] = foia.status not in ['submitted', 'ack', 'done', 'rejected']
         context['change_estimated_date'] = FOIAEstimatedCompletionDateForm(instance=foia)
@@ -584,7 +586,7 @@ class Detail(DetailView):
         if text and test:
             save_foia_comm(
                     foia,
-                    request.user.get_full_name(),
+                    request.user,
                     text,
                     request.user,
                     appeal=appeal,
@@ -692,21 +694,19 @@ class Detail(DetailView):
     def _agency_reply(self, request, foia):
         """Agency reply directly through the site"""
         form = FOIAAgencyReplyForm(request.POST)
-        if request.user.profile.agency:
-            from_who = request.user.profile.agency.name
-        else:
-            from_who = request.user.get_full_name()
         if form.is_valid():
             comm = FOIACommunication.objects.create(
                     foia=foia,
-                    from_who=from_who,
-                    to_who=foia.user.get_full_name(),
+                    from_user=from_user,
+                    to_user=foia.user,
                     response=True,
                     date=datetime.now(),
-                    full_html=False,
-                    delivered='web',
                     communication=form.cleaned_data['reply'],
                     status=form.cleaned_data['status'],
+                    )
+            WebCommunication.objects.create(
+                    communication=comm,
+                    sent_datetime=datetime.now(),
                     )
             foia.date_estimate = form.cleaned_data['date_estimate']
             foia.tracking_id = form.cleaned_data['tracking_id']
@@ -729,6 +729,7 @@ class Detail(DetailView):
             raise FormError
 
         return redirect(foia)
+
 
 def redirect_old(request, jurisdiction, slug, idx, action):
     """Redirect old urls to new urls"""

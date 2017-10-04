@@ -194,6 +194,7 @@ def toggle_autofollowups(request, jurisdiction, jidx, slug, idx):
 @user_passes_test(lambda u: u.is_staff)
 def admin_fix(request, jurisdiction, jidx, slug, idx):
     """Send an email from the requests auto email address"""
+    # XXX redo this view to use autocomplete forms
     foia = _get_foia(jurisdiction, jidx, slug, idx)
 
     if request.method == 'POST':
