@@ -58,7 +58,7 @@ class EmailAddressQuerySet(models.QuerySet):
 class EmailAddress(models.Model):
     """An email address"""
     email = models.EmailField(unique=True)
-    name = models.CharField(blank=True)
+    name = models.CharField(blank=True, max_length=255)
     # XXX concept of known good / known spam / known invalid email address?
 
     objects = EmailAddressQuerySet.as_manager()
@@ -78,6 +78,7 @@ class EmailAddress(models.Model):
 
     def allowed(self, foia=None):
         """Is this email address allowed to post to this FOIA request?"""
+        # pylint: disable=too-many-return-statements
         # XXX ensure this is tested
 
         allowed_tlds = ['.%s.us' % a.lower() for (a, _) in STATE_CHOICES
@@ -121,20 +122,26 @@ class PhoneNumber(models.Model):
     def __unicode__(self):
         return '%s (%s)' % (self.phone, self.type)
 
+    @property
+    def as_e164(self):
+        """Format as E164 (suitable for phaxio)"""
+        return self.number.as_e164
+
 
 class Address(models.Model):
     """A mailing address"""
     # XXX how do we want to do this?
     # uniqify this
-    address = models.TextField(blank=True)
+    address = models.TextField(unique=True)
 
-    # contact - field? model?
-    street = models.CharField(blank=True)
-    city = models.CharField(blank=True)
-    state = models.CharField(blank=True) # XXX use usa state field
-    zip_code = models.CharField(blank=True) # XXX use usa zip field
-    country = models.CharField(blank=True) # XXX use a country field?
-    # XXX put a geolocated point field here?
+    # XXX use full address for now, try to break into parts though
+    # for future use
+    address_to = models.CharField(blank=True, max_length=255)
+    street = models.CharField(blank=True, max_length=255)
+    city = models.CharField(blank=True, max_length=255)
+    state = models.CharField(blank=True, max_length=255)
+    zip_code = models.CharField(blank=True, max_length=20)
+    country = models.CharField(blank=True, max_length=255)
 
     def __unicode__(self):
         return self.address
@@ -144,13 +151,18 @@ class Address(models.Model):
 
 class EmailCommunication(models.Model):
     """An email sent or received to deliver a communication"""
-    communication = models.ForeignKey('foia.FOIACommunication', related='emails')
+    communication = models.ForeignKey('foia.FOIACommunication', related_name='emails')
     sent_datetime = models.DateTimeField()
     confirmed_datetime = models.DateTimeField(blank=True, null=True)
-    from_email = models.ForeignKey(EmailAddress, blank=True, null=True)
-    to_emails = models.ManyToMany(EmailAddress)
-    cc_emails = models.ManyToManyField(EmailAddress)
-    bcc_emails = models.ManyToManyField(EmailAddress)
+    from_email = models.ForeignKey(
+            EmailAddress,
+            blank=True,
+            null=True,
+            related_name='from_emails',
+            )
+    to_emails = models.ManyToManyField(EmailAddress, related_name='to_emails')
+    cc_emails = models.ManyToManyField(EmailAddress, related_name='cc_emails')
+    bcc_emails = models.ManyToManyField(EmailAddress, related_name='bcc_emails')
 
     def __unicode__(self):
         value = 'Email Communication'
@@ -170,7 +182,7 @@ class EmailCommunication(models.Model):
 
 class FaxCommunication(models.Model):
     """A fax sent to deliver a communication"""
-    communication = models.ForeignKey('foia.FOIACommunication', related='faxes')
+    communication = models.ForeignKey('foia.FOIACommunication', related_name='faxes')
     sent_datetime = models.DateTimeField()
     confirmed_datetime = models.DateTimeField(blank=True, null=True)
     to_number = models.ForeignKey(PhoneNumber)
@@ -182,10 +194,23 @@ class FaxCommunication(models.Model):
 
 class MailCommunication(models.Model):
     """A snail mail sent or received to deliver a communication"""
-    communication = models.ForeignKey('foia.FOIACommunication', related='mails')
+    communication = models.ForeignKey(
+            'foia.FOIACommunication',
+            related_name='mails',
+            )
     sent_datetime = models.DateTimeField()
-    from_address = models.ForeignKey(Address, blank=True, null=True)
-    to_address = models.ForeignKey(Address, blank=True, null=True)
+    from_address = models.ForeignKey(
+            Address,
+            blank=True,
+            null=True,
+            related_name='from_mails',
+            )
+    to_address = models.ForeignKey(
+            Address,
+            blank=True,
+            null=True,
+            related_name='to_mails',
+            )
 
     def __unicode__(self):
         return 'Mail Communication To %s' % self.to_address
@@ -193,7 +218,7 @@ class MailCommunication(models.Model):
 
 class WebCommunication(models.Model):
     """A communication posted to our site directly through our web form"""
-    communication = models.ForeignKey('foia.FOIACommunication', related='web_comms')
+    communication = models.ForeignKey('foia.FOIACommunication', related_name='web_comms')
     sent_datetime = models.DateTimeField()
 
     def __unicode__(self):
@@ -223,7 +248,6 @@ class EmailError(models.Model):
 
     class Meta:
         ordering = ['datetime']
-        app_label = 'foia'
 
 
 class FaxError(models.Model):
@@ -240,13 +264,12 @@ class FaxError(models.Model):
             )
     error_type = models.CharField(blank=True, max_length=255)
     error_code = models.CharField(blank=True, max_length=255)
-    error_id = models.SmallPositiveInteger(blank=True, null=True)
+    error_id = models.PositiveSmallIntegerField(blank=True, null=True)
 
     def __unicode__(self):
         return u'Fax Error: %s - %s' % (self.fax.pk, self.datetime)
 
     class Meta:
         ordering = ['datetime']
-        app_label = 'foia'
 
 

@@ -340,7 +340,7 @@ def send_fax(comm_id, subject, body, **kwargs):
             )
     try:
         results = api.send(
-                to=str(comm.foia.fax),
+                to=comm.foia.fax.as_e164,
                 header_text=subject[:45],
                 string_data=body,
                 string_data_type='text',

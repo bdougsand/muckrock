@@ -435,7 +435,7 @@ def phaxio_callback(request):
                         recipient=number,
                         error_type=recipient['error_type'],
                         error_code=recipient['error_code'],
-                        error_id=recipient['error_id'],
+                        error_id=int(recipient['error_id']),
                         )
 
     return HttpResponse('OK')

@@ -58,8 +58,9 @@ class FOIACommunication(models.Model):
     priv_to_who = models.CharField(max_length=255, blank=True)
     # XXX new fields - store a to and from user
     # - email address/fax/address will be stored on delivery model
-    from_user = models.ForeignKey('auth.User', related_name='sent_communications')
-    to_user = models.ForeignKey('auth.User', related_name='received_communications')
+    # XXX only nullable during transition
+    from_user = models.ForeignKey('auth.User', related_name='sent_communications', null=True)
+    to_user = models.ForeignKey('auth.User', related_name='received_communications', null=True)
 
     subject = models.CharField(max_length=255, blank=True)
     date = models.DateTimeField(db_index=True)
@@ -371,8 +372,9 @@ class RawEmail(models.Model):
     # XXX move this model to the communication app
 
     # XXX this gets moved to point to the email model
-    communication = models.OneToOneField(FOIACommunication)
-    email = models.OneToOneField('communication.EmailCommunication')
+    # XXX nullable during transition
+    communication = models.OneToOneField(FOIACommunication, null=True)
+    email = models.OneToOneField('communication.EmailCommunication', null=True)
     raw_email = models.TextField(blank=True)
 
     def __unicode__(self):
@@ -448,6 +450,9 @@ class CommunicationOpen(models.Model):
     email = models.ForeignKey(
             'communication.EmailCommunication',
             related_name='opens',
+            # XXX make nullable during transition
+            blank=True,
+            null=True,
             )
     date = models.DateTimeField()
 

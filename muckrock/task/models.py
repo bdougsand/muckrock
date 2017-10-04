@@ -92,9 +92,10 @@ class TaskQuerySet(models.QuerySet):
 
 class OrphanTaskQuerySet(models.QuerySet):
     """Object manager for orphan tasks"""
-    def get_from_sender(self, sender):
-        """Get all orphan tasks from a specific sender"""
-        return self.filter(communication__priv_from_who__icontains=sender)
+    def get_from_domain(self, domain):
+        """Get all orphan tasks from a specific domain"""
+        # XXX test
+        return self.filter(communication__emails__from_email__email__icontains=domain)
 
 
 class NewAgencyTaskQuerySet(models.QuerySet):
@@ -184,11 +185,8 @@ class OrphanTask(Task):
 
     def get_sender_domain(self):
         """Gets the domain of the sender's email address."""
-        _, email_address = email.utils.parseaddr(self.communication.priv_from_who)
-        if '@' not in email_address:
-            return None
-        else:
-            return email_address.split('@')[1]
+        # XXX test
+        return self.communication.emails.first().from_email.domain
 
     def blacklist(self):
         """Adds the communication's sender's domain to the email blacklist."""
@@ -227,6 +225,7 @@ class SnailMailTask(Task):
 
     def update_date(self):
         """Sets the date of the communication to today"""
+        # XXX remove?
         comm = self.communication
         comm.date = datetime.now()
         comm.save()
@@ -263,21 +262,6 @@ class RejectedEmailTask(Task):
 
     def get_absolute_url(self):
         return reverse('rejected-email-task', kwargs={'pk': self.pk})
-
-    def agencies(self):
-        """Get the agencies who use this email address"""
-        from muckrock.agency.models import Agency
-        return Agency.objects.filter(Q(email__iexact=self.email) |
-                                     Q(other_emails__icontains=self.email))
-
-    def foias(self):
-        """Get the FOIAs who use this email address"""
-        return (FOIARequest.objects
-                .select_related('jurisdiction')
-                .filter(Q(email__iexact=self.email) |
-                        Q(other_emails__icontains=self.email))
-                .filter(status__in=['ack', 'processed', 'appealing',
-                                    'fix', 'payment']))
 
 
 class StaleAgencyTask(Task):
@@ -411,6 +395,7 @@ class NewAgencyTask(Task):
             comms = foia.communications.all()
             if comms.count():
                 first_comm = comms[0]
+                # XXX need ot rethink how the contact information gets set here
                 first_comm.resend(self.agency.get_email())
 
     def reject(self, replacement_agency):
@@ -422,6 +407,7 @@ class NewAgencyTask(Task):
             foia.agency = replacement_agency
             foia.save(comment='new agency task')
             comms = foia.communications.all()
+            # XXX need to rethink how resending works here
             if comms.count() and foia.status != 'started':
                 first_comm = comms[0]
                 first_comm.resend(replacement_agency.email)
@@ -541,7 +527,7 @@ class FailedFaxTask(Task):
 
 
 class StatusChangeTask(Task):
-    """A user has the status on a request"""
+    """A user has changed the status on a request"""
     type = 'StatusChangeTask'
     user = models.ForeignKey(User)
     old_status = models.CharField(max_length=255)
@@ -672,6 +658,7 @@ class NewExemptionTask(Task):
 
 
 # Not a task, but used by tasks
+# XXX move to communication app?
 class BlacklistDomain(models.Model):
     """A domain to be blacklisted from sending us emails"""
     domain = models.CharField(max_length=255)

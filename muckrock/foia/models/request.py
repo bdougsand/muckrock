@@ -240,13 +240,14 @@ class FOIARequest(models.Model):
     updated = models.BooleanField(default=False)
 
     # XXX dont just assume we are sending to email anymore
-    email = models.CharField(blank=True, max_length=254)
+    old_email = models.CharField(blank=True, max_length=254)
     other_emails = fields.EmailsListField(blank=True, max_length=255)
     # new fields
-    # XXX name claseh
     email = models.ForeignKey(
             'communication.EmailAddress',
             related_name='foias',
+            blank=True,
+            null=True,
             )
     cc_emails = models.ManyToManyField(
             'communication.EmailAddress',
@@ -255,10 +256,14 @@ class FOIARequest(models.Model):
     fax = models.ForeignKey(
             'communication.PhoneNumber',
             related_name='foias',
+            blank=True,
+            null=True,
             )
     address = models.ForeignKey(
             'communication.Address',
             related_name='foias',
+            blank=True,
+            null=True,
             )
 
     times_viewed = models.IntegerField(default=0)

@@ -17,7 +17,7 @@ from django_filters import FilterSet
 
 from muckrock.agency.forms import AgencyForm
 from muckrock.agency.models import Agency
-from muckrock.communication.models import MailCommunication
+from muckrock.communication.models import MailCommunication, EmailAddress
 from muckrock.foia.models import STATUS, FOIARequest, FOIACommunication, FOIAFile
 from muckrock.task.filters import (
     TaskFilterSet,
@@ -299,7 +299,8 @@ class StaleAgencyTaskList(TaskList):
         if request.POST.get('update'):
             email_form = StaleAgencyTaskForm(request.POST)
             if email_form.is_valid():
-                new_email = email_form.cleaned_data['email']
+                new_email = EmailAddress.objects.fetch(
+                        email_form.cleaned_data['email'])
                 foia_pks = request.POST.getlist('foia')
                 foias = FOIARequest.objects.filter(pk__in=foia_pks)
                 task.update_email(new_email, foias)

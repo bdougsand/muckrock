@@ -16,7 +16,6 @@ import logging
 
 from muckrock.accounts.models import Profile
 from muckrock.accounts.utils import unique_username
-from muckrock.foia.models import FOIACommunication
 from muckrock.jurisdiction.models import Jurisdiction, RequestHelper
 from muckrock.task.models import StaleAgencyTask
 from muckrock import fields
@@ -283,7 +282,7 @@ EMAIL_TYPES = (
         ('none', 'None'),
         )
 
-# pylint: model-missing-unicode
+# pylint: disable=model-missing-unicode
 
 class AgencyAddress(models.Model):
     """Through model for agency to address M2M"""
