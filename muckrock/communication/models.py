@@ -117,7 +117,6 @@ class PhoneNumber(models.Model):
     """A phone number"""
     number = PhoneNumberField(unique=True)
     type = models.CharField(max_length=5, choices=PHONE_TYPES)
-    # XXX extension?
 
     def __unicode__(self):
         return '%s (%s)' % (self.phone, self.type)

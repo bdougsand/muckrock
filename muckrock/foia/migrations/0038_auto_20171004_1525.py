@@ -26,7 +26,7 @@ def migrate_email(apps, schema_editor):
                 foia.fax = phone
                 foia.save()
             else:
-                print('What is this?', foia.old_email)
+                print('What is this?: %s' % foia.old_email)
         if foia.other_emails:
             for email in email_separator_re.split(foia.other_emails):
                 email_addr = EmailAddress.objects.fetch(email)
