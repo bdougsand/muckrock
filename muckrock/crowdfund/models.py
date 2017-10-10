@@ -152,7 +152,7 @@ class Crowdfund(models.Model):
                 text_template='crowdfund/email/intro.txt',
                 html_template='crowdfund/email/intro.html',
                 extra_context={
-                    'amount': self.payment_required,
+                    'amount': int(self.payment_required),
                     'url': self.get_crowdfund_object().get_absolute_url(),
                     }
                 )
