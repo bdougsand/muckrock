@@ -3,6 +3,8 @@
 Models for the FOIA application
 """
 
+# pylint: disable=too-many-lines
+
 from django.conf import settings
 from django.contrib.auth.models import User, AnonymousUser
 from django.core.mail import EmailMultiAlternatives
@@ -245,6 +247,11 @@ class FOIARequest(models.Model):
     )
     crowdfund = models.OneToOneField('crowdfund.Crowdfund',
             related_name='foia', blank=True, null=True)
+    multirequest = models.ForeignKey(
+            'foia.FOIAMultiRequest',
+            blank=True,
+            null=True,
+            )
 
     read_collaborators = models.ManyToManyField(
         User,

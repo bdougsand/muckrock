@@ -6,7 +6,6 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.template.defaultfilters import slugify
 from django.template.loader import get_template
-from django.template import RequestContext
 
 import actstream
 from datetime import datetime
@@ -63,7 +62,14 @@ class FOIARequestViewSet(viewsets.ModelViewSet):
 
         class Meta:
             model = FOIARequest
-            fields = ('user', 'title', 'status', 'embargo', 'jurisdiction', 'agency', 'tags__name')
+            fields = (
+                    'user',
+                    'title',
+                    'status',
+                    'embargo',
+                    'jurisdiction',
+                    'agency',
+                    )
 
     filter_class = Filter
 
@@ -104,11 +110,11 @@ class FOIARequestViewSet(viewsets.ModelViewSet):
             else:
                 requested_docs = data['document_request']
                 template = get_template('text/foia/request.txt')
-                context = RequestContext(request, {
+                context = {
                     'document_request': requested_docs,
                     'jurisdiction': jurisdiction,
                     'user_name': request.user.get_full_name,
-                    })
+                    }
                 text = template.render(context)
 
             title = data['title']
@@ -273,8 +279,16 @@ class FOIACommunicationViewSet(viewsets.ModelViewSet):
         # pylint: disable=too-few-public-methods
         min_date = django_filters.DateFilter(name='date', lookup_expr='gte')
         max_date = django_filters.DateFilter(name='date', lookup_expr='lte')
+        foia = django_filters.NumberFilter(name='foia__id')
         class Meta:
             model = FOIACommunication
-            fields = ('max_date', 'min_date', 'foia', 'status', 'response', 'delivered')
+            fields = (
+                    'max_date',
+                    'min_date',
+                    'foia',
+                    'status',
+                    'response',
+                    'delivered',
+                    )
 
     filter_class = Filter

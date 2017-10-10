@@ -17,6 +17,7 @@ from muckrock.foia.models import (
         FOIAFile,
         RawEmail,
         OutboundAttachment,
+        FOIAMultiRequest,
         )
 from muckrock.jurisdiction.models import Jurisdiction
 from muckrock.news.models import Article
@@ -45,6 +46,14 @@ class UserFactory(factory.django.DjangoModelFactory):
     username = factory.Sequence(lambda n: "user_%d" % n)
     email = factory.Faker('email')
     profile = factory.RelatedFactory(ProfileFactory, 'user')
+
+    @factory.post_generation
+    def password(self, create, extracted, **kwargs):
+        """Sets password"""
+        # pylint: disable=unused-argument
+        if extracted:
+            self.set_password(extracted)
+            self.save()
 
 
 class NotificationFactory(factory.django.DjangoModelFactory):
@@ -119,6 +128,25 @@ class FOIACommunicationFactory(factory.django.DjangoModelFactory):
     priv_from_who = 'Test Sender <test@muckrock.com>'
     date = factory.LazyAttribute(lambda obj: datetime.datetime.now())
     rawemail = factory.RelatedFactory('muckrock.factories.RawEmailFactory', 'communication')
+
+
+class FOIAMultiRequestFactory(factory.django.DjangoModelFactory):
+    """A factory for creating FOIAMultiRequest test objects."""
+    class Meta:
+        model = FOIAMultiRequest
+
+    title = factory.Sequence(lambda n: "FOIA Multi Request %d" % n)
+    slug = factory.LazyAttribute(lambda obj: slugify(obj.title))
+    user = factory.SubFactory(UserFactory)
+
+    @factory.post_generation
+    def agencies(self, create, extracted, **kwargs):
+        """Adds M2M agencies"""
+        # pylint: disable=unused-argument
+        if create and extracted:
+            # A list of agencies were passed in, use them
+            for agency in extracted:
+                self.agencies.add(agency)
 
 
 class RawEmailFactory(factory.django.DjangoModelFactory):

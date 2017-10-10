@@ -168,8 +168,8 @@ def _handle_request(request, mail_id):
     # pylint: disable=broad-except
     # pylint: disable=too-many-locals
     post = request.POST
-    from_ = post.get('From')
-    to_ = post.get('To') or post.get('to')
+    from_ = post.get('From', '')
+    to_ = post.get('To') or post.get('to', '')
     subject = post.get('Subject') or post.get('subject', '')
 
     try:
@@ -242,10 +242,15 @@ def _handle_request(request, mail_id):
             communication=comm,
             address=mail_id)
         return HttpResponse('WARNING')
-    except Exception:
+    except Exception as exc:
         # If anything I haven't accounted for happens, at the very least forward
         # the email to requests so it isn't lost
-        logger.error('Uncaught Mailgun Exception: %s', mail_id, exc_info=sys.exc_info())
+        logger.error(
+                'Uncaught Mailgun Exception - %s: %s',
+                mail_id,
+                exc,
+                exc_info=sys.exc_info(),
+                )
         _forward(post, request.FILES, 'Uncaught Mailgun Exception', info=True)
         return HttpResponse('ERROR')
 

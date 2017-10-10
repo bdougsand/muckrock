@@ -11,10 +11,10 @@ from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render, get_object_or_404, redirect
 from django.template.defaultfilters import slugify
 from django.template.loader import get_template
-from django.template import Context
 from django.utils.encoding import smart_text
 
 from datetime import datetime, date
+from math import ceil
 import logging
 
 from muckrock.accounts.utils import miniregister
@@ -62,12 +62,12 @@ def get_foia(jurisdiction, jidx, slug, idx, select_related=None, prefetch_relate
 def _make_comm(foia, from_who, proxy=False):
     """A helper function to compose the text of a communication"""
     template = get_template('text/foia/request.txt')
-    context = Context({
+    context = {
         'document_request': smart_text(foia.requested_docs),
         'jurisdiction': foia.jurisdiction,
         'user_name': from_who,
         'proxy': proxy,
-    })
+    }
     request_text = template.render(context).split('\n', 1)[1].strip()
     return request_text
 
@@ -383,8 +383,6 @@ def create_multirequest(request):
 @login_required
 def draft_multirequest(request, slug, idx):
     """Update a started FOIA MultiRequest"""
-    from math import ceil
-
     foia = get_object_or_404(FOIAMultiRequest, slug=slug, pk=idx)
 
     if foia.user != request.user:
@@ -407,13 +405,22 @@ def draft_multirequest(request, slug, idx):
                     num_requests = len(foia.agencies.all())
                     request_count = profile.multiple_requests(num_requests)
                     if request_count['extra_requests']:
-                        err_msg = 'You have not purchased enough requests.'
-                        err_msg = 'Please purchase more requests, then try submitting again.'
-                        messages.warning(request, err_msg)
+                        messages.warning(
+                                request,
+                                'You have not purchased enough requests.  '
+                                'Please purchase more requests, then try '
+                                'submitting again.',
+                                )
                         return redirect(foia)
                     profile.num_requests -= request_count['reg_requests']
                     profile.monthly_requests -= request_count['monthly_requests']
                     profile.save()
+                    if profile.organization:
+                        profile.organization.num_requests -= request_count['org_requests']
+                        profile.organization.save()
+                    foia.num_reg_requests = request_count['reg_requests']
+                    foia.num_monthly_requests = request_count['monthly_requests']
+                    foia.num_org_requests = request_count['org_requests']
                     foia.status = 'submitted'
                     foia.date_processing = date.today()
                     foia.save()

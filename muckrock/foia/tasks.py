@@ -10,7 +10,6 @@ from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string, get_template
-from django.template import Context
 
 import dill as pickle
 import dbsettings
@@ -191,23 +190,39 @@ def submit_multi_request(req_pk, **kwargs):
             # make a copy of the foia (and its communication) for each agency
             title = '%s (%s)' % (req.title, agency.name)
             template = get_template('text/foia/request.txt')
-            context = Context({'document_request': req.requested_docs,
-                               'jurisdiction': agency.jurisdiction,
-                               'user_name': req.user.get_full_name()})
+            context = {
+                    'document_request': req.requested_docs,
+                    'jurisdiction': agency.jurisdiction,
+                    'user_name': req.user.get_full_name(),
+                    }
             foia_request = template.render(context).split('\n', 1)[1].strip()
 
             new_foia = FOIARequest.objects.create(
-                user=req.user, status='started', title=title, slug=slugify(title),
-                jurisdiction=agency.jurisdiction, agency=agency, embargo=req.embargo,
-                requested_docs=req.requested_docs, description=req.requested_docs)
+                user=req.user,
+                status='started',
+                title=title,
+                slug=slugify(title),
+                jurisdiction=agency.jurisdiction,
+                agency=agency,
+                embargo=req.embargo,
+                requested_docs=req.requested_docs,
+                description=req.requested_docs,
+                multirequest=req,
+                )
 
             FOIACommunication.objects.create(
-                foia=new_foia, from_who=new_foia.user.get_full_name(),
-                to_who=new_foia.get_to_who(), date=datetime.now(), response=False,
-                full_html=False, communication=foia_request)
+                foia=new_foia,
+                from_who=new_foia.user.get_full_name(),
+                to_who=new_foia.get_to_who(),
+                date=datetime.now(),
+                response=False,
+                full_html=False,
+                communication=foia_request,
+                )
 
             new_foia.submit()
-    req.delete()
+    req.status = 'filed'
+    req.save()
 
 @task(ignore_result=True, max_retries=3, name='muckrock.foia.tasks.classify_status')
 def classify_status(task_pk, **kwargs):

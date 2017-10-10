@@ -18,6 +18,7 @@ from muckrock.tags.models import TaggedItemBase
 
 class RequestHelper(object):
     """Helper methods for classes that have a get_requests() method"""
+
     def average_response_time(self):
         """Get the average response time from a submitted to completed request"""
         requests = self.get_requests()
@@ -37,7 +38,7 @@ class RequestHelper(object):
         fee = float(requests.get_submitted().filter(price__gt=0).count())
         rate = 0
         if filed > 0:
-            rate = fee/filed * 100
+            rate = fee / filed * 100
         return rate
 
     def success_rate(self):
@@ -47,7 +48,7 @@ class RequestHelper(object):
         completed = float(requests.get_done().count())
         rate = 0
         if filed > 0:
-            rate = completed/filed * 100
+            rate = completed / filed * 100
         return rate
 
     def total_pages(self):
@@ -321,7 +322,7 @@ class InvokedExemption(models.Model):
     request = models.ForeignKey(FOIARequest)
     use_language = models.TextField(blank=True,
         help_text='What language did the aguency use to invoke the exemption?')
-    properly_invoked = models.BooleanField(default=True,
+    properly_invoked = models.NullBooleanField(default=None,
         help_text='Did the agency properly invoke the exemption to the request?')
 
     def __unicode__(self):
