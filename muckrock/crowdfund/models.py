@@ -147,12 +147,11 @@ class Crowdfund(models.Model):
         msg = TemplateEmail(
                 subject='Crowdfund Campaign Launched',
                 from_email='info@muckrock.com',
-                to=[user.email],
+                user=user,
                 bcc=['diagnostics@muckrock', 'info@muckrock'],
                 text_template='crowdfund/email/intro.txt',
                 html_template='crowdfund/email/intro.html',
                 extra_context={
-                    'user': user.first_name,
                     'amount': self.payment_required,
                     'url': self.get_crowdfund_object().get_absolute_url(),
                     }
