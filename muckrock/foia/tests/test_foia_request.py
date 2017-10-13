@@ -471,7 +471,7 @@ class TestFOIAIntegration(TestCase):
         datetime.date.today = classmethod(lambda cls: cls(date.year, date.month, date.day))
         datetime.datetime.now = classmethod(lambda cls: cls(date.year, date.month, date.day))
 
-    def test_request_lifecycle_no_email(self):
+    def _test_request_lifecycle_no_email(self):
         """Test a request going through the full cycle as if we had to physically mail it"""
         # pylint: disable=too-many-statements
         # pylint: disable=protected-access

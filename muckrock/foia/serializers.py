@@ -68,7 +68,6 @@ class FOIACommunicationSerializer(serializers.ModelSerializer):
     likely_foia = serializers.PrimaryKeyRelatedField(
             queryset=FOIARequest.objects.all(),
             style={'base_template': 'input.html'})
-    # XXX probably need to do something for from_user / to_user here
     class Meta:
         model = FOIACommunication
 
@@ -101,7 +100,6 @@ class FOIARequestSerializer(serializers.ModelSerializer):
     communications = FOIACommunicationSerializer(many=True)
     notes = FOIANoteSerializer(many=True)
     absolute_url = serializers.ReadOnlyField(source='get_absolute_url')
-    # XXX show email/fax to staff
 
     def __init__(self, *args, **kwargs):
         # pylint: disable=super-on-old-class

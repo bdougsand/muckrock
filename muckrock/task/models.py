@@ -235,7 +235,6 @@ class SnailMailTask(Task):
 
     def update_date(self):
         """Sets the date of the communication to today"""
-        # XXX remove?
         comm = self.communication
         comm.date = datetime.now()
         comm.save()

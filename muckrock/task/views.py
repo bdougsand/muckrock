@@ -232,7 +232,7 @@ class SnailMailTaskList(TaskList):
         if status:
             task.set_status(status)
             # updating the date is an option and not an action
-            # XXX we should get rid of updating the date
+            # we should get rid of updating the date
             if request.POST.get('update_date'):
                 task.update_date()
         # if the task is in the payment category and we're given a check

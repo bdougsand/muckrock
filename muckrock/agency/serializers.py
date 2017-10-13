@@ -29,7 +29,7 @@ class AgencySerializer(serializers.ModelSerializer):
     average_response_time = serializers.ReadOnlyField()
     fee_rate = serializers.ReadOnlyField()
     success_rate = serializers.ReadOnlyField()
-    # XXX how to do addresses?
+    # how to do addresses?
 
     def __init__(self, *args, **kwargs):
         """After initializing the serializer,
