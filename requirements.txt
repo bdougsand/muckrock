@@ -67,7 +67,6 @@ jsonfield==1.0.3
 kombu==3.0.35             # via celery
 lxml==3.6.4               # via premailer
 markdown==2.6.7
-olefile==0.44
 newrelic==2.70.0.51
 numpy==1.9.1
 olefile==0.44             # via pillow
